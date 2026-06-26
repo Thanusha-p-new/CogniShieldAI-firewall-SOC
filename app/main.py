@@ -9,9 +9,7 @@ from app.scanner import scan_prompt
 from app.analytics import update_stats, get_stats
 
 app = FastAPI()
-@app.get("/")
-async def root():
-    return {"message": "CogniShield AI Firewall API is running"}
+
 
 # ---------------- USERS ----------------
 USERS = {
