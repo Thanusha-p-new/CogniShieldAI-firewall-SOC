@@ -3,6 +3,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 from pathlib import Path
 
+# Lazy loading variables
 model = None
 attack_embeddings = None
 attack_samples = None
@@ -11,7 +12,10 @@ attack_samples = None
 def initialize_model():
     global model, attack_embeddings, attack_samples
 
+    # Load only once, when needed
     if model is None:
+
+        print("Loading semantic model...")
 
         model = SentenceTransformer("all-MiniLM-L6-v2")
 
@@ -29,14 +33,22 @@ def initialize_model():
                 if line.strip()
             ]
 
-        attack_embeddings = model.encode(attack_samples)
+        attack_embeddings = model.encode(
+            attack_samples,
+            convert_to_numpy=True
+        )
+
+        print("Semantic model loaded successfully.")
 
 
-def semantic_scan(prompt):
+def semantic_scan(prompt: str):
 
     initialize_model()
 
-    prompt_embedding = model.encode([prompt])
+    prompt_embedding = model.encode(
+        [prompt],
+        convert_to_numpy=True
+    )
 
     similarities = cosine_similarity(
         prompt_embedding,
