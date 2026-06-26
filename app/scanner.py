@@ -1,6 +1,6 @@
 import re
 from app.classifier import classify_attack
-from app.vector_db import semantic_scan
+#from app.vector_db import semantic_scan
 from app.threat_engine import compute_threat_score
 
 PATTERNS = [
@@ -78,10 +78,10 @@ def scan_prompt(prompt: str):
         detection_methods.append("soft_pattern")
 
     # semantic detection
-    try:
-        result = semantic_scan(prompt)
-        similarity = float(result.get("similarity", 0.0))
-    except:
+    #try:
+     #   result = semantic_scan(prompt)
+      #  similarity = float(result.get("similarity", 0.0))
+    #except:
         similarity = 0.0
 
     if similarity > 0.15:
