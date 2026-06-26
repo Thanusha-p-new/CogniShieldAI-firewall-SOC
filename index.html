@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>CogniShieldAI Firewall SOC</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+    canvas {
+    width: 300px !important;
+    height: 180px !important;
+}
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #0b1220;
+    color: white;
+}
+
+/* LOGIN */
+#loginBox {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #0b1220;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.login-card {
+    background: #1f2937;
+    padding: 20px;
+    border-radius: 10px;
+    width: 300px;
+}
+
+.header {
+    background: linear-gradient(90deg, #0f172a, #1e3a8a, #0f172a);
+    padding: 14px;
+    font-weight: bold;
+    color: #38bdf8;
+}
+
+.wrapper {
+    display: flex;
+    height: calc(100vh - 50px);
+}
+
+.sidebar {
+    width: 180px;
+    background: #111827;
+    padding: 10px;
+}
+
+.menu-btn {
+    width: 100%;
+    padding: 10px;
+    margin: 5px 0;
+    background: #1f2937;
+    color: white;
+    border: none;
+    cursor: pointer;
+}
+
+.menu-btn:hover {
+    background: #38bdf8;
+}
+
+.main {
+    flex: 1;
+    padding: 15px;
+}
+
+.card {
+    background: #1f2937;
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+}
+
+textarea {
+    width: 100%;
+    height: 90px;
+    background: #0b1220;
+    color: white;
+    border: none;
+}
+
+button.scan {
+    width: 100%;
+    padding: 10px;
+    background: #38bdf8;
+    border: none;
+}
+
+.blocked { color: red; }
+.safe { color: lightgreen; }
+
+.page { display: none; }
+.active { display: block; }
+
+#alert {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: red;
+    padding: 10px;
+    display: none;
+}
+</style>
+</head>
+
+<body>
+
+<!-- LOGIN -->
+<div id="loginBox">
+    <div class="login-card">
+        <h2>CogniShieldAI Login</h2>
+        <input id="username" placeholder="Username">
+        <input id="password" type="password" placeholder="Password">
+        <button onclick="login()">Login</button>
+        <p id="loginMsg"></p>
+    </div>
+</div>
+
+<!-- APP -->
+<div id="app" style="display:none;">
+
+<div class="header">CogniShieldAI Firewall SOC Dashboard</div>
+
+<div class="wrapper">
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+<button class="menu-btn" onclick="showPage('home'); loadStats()">Home</button>
+<button class="menu-btn" onclick="showPage('overview'); loadStats()">Overview</button>
+<button class="menu-btn" onclick="showPage('feed'); loadStats()">Live Feed</button>
+<button class="menu-btn" onclick="showPage('charts'); loadStats()">Charts</button>
+<button class="menu-btn" onclick="downloadReport()">Download Report</button>
+<button class="menu-btn" onclick="showPage('timeline'); loadStats()">Timeline</button>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+<div id="home" class="page active">
+<div class="card">
+<h3>Prompt Scanner</h3>
+<textarea id="prompt"></textarea>
+<button class="scan" onclick="scan()">Scan</button>
+<div id="result">Waiting...</div>
+</div>
+</div>
+
+<div id="overview" class="page">
+<div class="card">
+<h3>Overview</h3>
+<p>Total: <span id="total">0</span></p>
+<p>Blocked: <span id="blocked">0</span></p>
+<p>Safe: <span id="safe">0</span></p>
+<p>Suspicious: <span id="suspicious">0</span></p>
+<div id="types"></div>
+</div>
+</div>
+
+<div id="feed" class="page">
+<div class="card">
+<h3>Live Feed</h3>
+<div id="feedList"></div>
+</div>
+</div>
+
+<div id="charts" class="page">
+<div class="card">
+<h3>Attack Distribution</h3>
+<canvas id="chart"></canvas>
+</div>
+
+<div class="card">
+<h3>Risk Levels</h3>
+<canvas id="riskChart"></canvas>
+</div>
+</div>
+
+<div id="timeline" class="page">
+<div class="card">
+<h3>Timeline</h3>
+<canvas id="timelineChart"></canvas>
+</div>
+</div>
+
+</div>
+</div>
+
+<div id="alert">🚨 CRITICAL ATTACK DETECTED</div>
+
+<script>
+
+let token = null;
+let chart, riskChart, timelineChart;
+
+/* LOGIN */
+async function login() {
+
+    const username = document.getElementById("username").value;
+    const password = document.getElementById("password").value;
+
+    const res = await fetch("/login", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({username, password})
+    });
+
+    const data = await res.json();
+
+    if (data.token) {
+        token = data.token;
+        localStorage.setItem("token", token);
+
+        document.getElementById("loginBox").style.display = "none";
+        document.getElementById("app").style.display = "block";
+
+        loadStats(); // 🔥 IMPORTANT FIX
+    } else {
+        document.getElementById("loginMsg").innerText = "Invalid login";
+    }
+}
+
+/* PAGE */
+function showPage(page) {
+    document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+    document.getElementById(page).classList.add("active");
+}
+
+/* AUTH FETCH */
+async function safeFetch(url, options = {}) {
+
+    options.headers = {
+        ...(options.headers || {}),
+        "token": localStorage.getItem("token")
+    };
+
+    const res = await fetch(url, options);
+
+    if (res.status === 401) {
+        alert("Login expired");
+        location.reload();
+        return null;
+    }
+
+    return res;
+}
+
+/* SCAN */
+async function scan() {
+
+    const prompt = document.getElementById("prompt").value;
+
+    const res = await safeFetch("/scan", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({prompt})
+    });
+
+    const data = await res.json();
+
+    document.getElementById("result").innerHTML =
+        `<p class="${data.blocked ? 'blocked':'safe'}">
+        ${data.blocked ? 'BLOCKED' : 'SAFE'}
+        </p>`;
+
+    loadStats();
+}
+
+/* LOAD DATA */
+async function loadStats() {
+
+    const res = await safeFetch("/stats");
+    if (!res) return;
+
+    const data = await res.json();
+
+    document.getElementById("total").innerText = data.total || 0;
+    document.getElementById("blocked").innerText = data.blocked || 0;
+    document.getElementById("safe").innerText = data.safe || 0;
+    document.getElementById("suspicious").innerText = data.suspicious || 0;
+
+    document.getElementById("types").innerHTML =
+        Object.entries(data.attack_types || {})
+        .map(([k,v]) => `<p>${k}: ${v}</p>`)
+        .join("");
+
+    document.getElementById("feedList").innerHTML =
+        (data.recent_events || [])
+        .slice().reverse()
+        .map(e => `<p>[${e.risk}] ${e.attack_type}</p>`)
+        .join("");
+
+    /* CHARTS */
+    if (chart) chart.destroy();
+    if (riskChart) riskChart.destroy();
+    if (timelineChart) timelineChart.destroy();
+
+    const labels = Object.keys(data.attack_types || {});
+    const values = Object.values(data.attack_types || {});
+
+    chart = new Chart(document.getElementById("chart"), {
+        type: "pie",
+        data: { labels, datasets: [{ data: values }] }
+    });
+
+    riskChart = new Chart(document.getElementById("riskChart"), {
+        type: "bar",
+        data: {
+            labels: Object.keys(data.risk_levels || {}),
+            datasets: [{ data: Object.values(data.risk_levels || {}) }]
+        }
+    });
+
+    const tLabels = (data.timeline || []).map((_, i) => "Event " + (i + 1));
+    const tValues = (data.timeline || []).map(e =>
+        e.risk === "CRITICAL" ? 100 :
+        e.risk === "HIGH" ? 70 :
+        e.risk === "MEDIUM" ? 30 : 10
+    );
+
+    timelineChart = new Chart(document.getElementById("timelineChart"), {
+        type: "line",
+        data: {
+            labels: tLabels,
+            datasets: [{
+                label: "Threat Timeline",
+                data: tValues,
+                borderColor: "#38bdf8"
+            }]
+        }
+    });
+}
+
+/* REPORT */
+async function downloadReport() {
+
+    const res = await safeFetch("/stats");
+    const data = await res.json();
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json"
+    });
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+
+    a.href = url;
+    a.download = "CogniShieldAI_Report.json";
+    a.click();
+}
+
+</script>
+
+</body>
+</html>
