@@ -1,94 +1,82 @@
-from fastapi import FastAPI, WebSocket, Request, HTTPException, Depends
+from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
-from typing import List, Dict
-import uuid
+from typing import List
 import json
+import os
 
 from app.scanner import scan_prompt
 from app.analytics import update_stats, get_stats
 
 app = FastAPI()
 
-
-# ---------------- USERS ----------------
-USERS = {
-    "admin": "admin123",
-    "soc": "secure123",
-    "user1": "pass123"
-}
-
-SESSIONS: Dict[str, str] = {}
-
 connections: List[WebSocket] = []
 
-
-# ---------------- MODELS ----------------
-class LoginRequest(BaseModel):
-    username: str
-    password: str
 
 class PromptRequest(BaseModel):
     prompt: str
 
 
-# ---------------- HOME ----------------
 @app.get("/api")
-def api():
-    return {"message": "CogniShieldAI Running"}
+def home():
+    return {"message": "AI Firewall Running"}
 
 
 @app.get("/")
-def home():
+def dashboard():
     with open("templates/index.html", "r", encoding="utf-8") as f:
         return HTMLResponse(f.read())
 
 
-# ---------------- LOGIN ----------------
-@app.post("/login")
-def login(data: LoginRequest):
+async def broadcast(data: dict):
+    dead = []
 
-    if data.username not in USERS or USERS[data.username] != data.password:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+    for conn in connections:
+        try:
+            await conn.send_text(json.dumps(data))
+        except:
+            dead.append(conn)
 
-    token = str(uuid.uuid4())
-    SESSIONS[token] = data.username
-
-    return {
-        "token": token,
-        "user": data.username
-    }
+    for d in dead:
+        if d in connections:
+            connections.remove(d)
 
 
-# ---------------- AUTH ----------------
-def auth(request: Request):
-    token = request.headers.get("token")
-
-    if not token or token not in SESSIONS:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
-    return SESSIONS[token]
-
-
-# ---------------- SCAN ----------------
 @app.post("/scan")
-def scan(req: PromptRequest, user=Depends(auth)):
+async def scan(request: PromptRequest):
 
-    result = scan_prompt(req.prompt)
-    result["user"] = user
+    result = scan_prompt(request.prompt)
 
     update_stats(result)
+
+    await broadcast({
+        "type": "scan_update",
+        "stats": get_stats(),
+        "last_scan": result
+    })
 
     return result
 
 
-# ---------------- STATS ----------------
 @app.get("/stats")
-def stats(user=Depends(auth)):
+def stats():
     return get_stats()
 
 
-# ---------------- WS ----------------
+@app.get("/logs")
+def get_logs():
+    file = "logs/attacks.log"
+
+    if not os.path.exists(file):
+        return {"logs": []}
+
+    try:
+        with open(file, "r", encoding="utf-8") as f:
+            return {"logs": f.readlines()[-50:]}
+    except:
+        return {"logs": []}
+
+
 @app.websocket("/ws")
 async def ws(websocket: WebSocket):
     await websocket.accept()
