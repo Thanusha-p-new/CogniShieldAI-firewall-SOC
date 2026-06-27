@@ -2,40 +2,21 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>CogniShieldAI Firewall SOC</title>
+<title>CogniShieldAI-firewall-SOC</title>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
-    canvas {
+canvas {
     width: 300px !important;
     height: 180px !important;
 }
+
 body {
     margin: 0;
     font-family: Arial, sans-serif;
     background: #0b1220;
     color: white;
-}
-
-/* LOGIN */
-#loginBox {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: #0b1220;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.login-card {
-    background: #1f2937;
-    padding: 20px;
-    border-radius: 10px;
-    width: 300px;
 }
 
 .header {
@@ -116,25 +97,10 @@ button.scan {
 
 <body>
 
-<!-- LOGIN -->
-<div id="loginBox">
-    <div class="login-card">
-        <h2>CogniShieldAI Login</h2>
-        <input id="username" placeholder="Username">
-        <input id="password" type="password" placeholder="Password">
-        <button onclick="login()">Login</button>
-        <p id="loginMsg"></p>
-    </div>
-</div>
-
-<!-- APP -->
-<div id="app" style="display:none;">
-
-<div class="header">CogniShieldAI Firewall SOC Dashboard</div>
+<div class="header">CogniShieldAI-firewall-SOC Dashboard</div>
 
 <div class="wrapper">
 
-<!-- SIDEBAR -->
 <div class="sidebar">
 <button class="menu-btn" onclick="showPage('home'); loadStats()">Home</button>
 <button class="menu-btn" onclick="showPage('overview'); loadStats()">Overview</button>
@@ -144,7 +110,6 @@ button.scan {
 <button class="menu-btn" onclick="showPage('timeline'); loadStats()">Timeline</button>
 </div>
 
-<!-- MAIN -->
 <div class="main">
 
 <div id="home" class="page active">
@@ -200,64 +165,18 @@ button.scan {
 
 <script>
 
-let token = null;
 let chart, riskChart, timelineChart;
 
-/* LOGIN */
-async function login() {
-
-    const username = document.getElementById("username").value;
-    const password = document.getElementById("password").value;
-
-    const res = await fetch("/login", {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({username, password})
-    });
-
-    const data = await res.json();
-
-    if (data.token) {
-        token = data.token;
-        localStorage.setItem("token", token);
-
-        document.getElementById("loginBox").style.display = "none";
-        document.getElementById("app").style.display = "block";
-
-        loadStats(); // 🔥 IMPORTANT FIX
-    } else {
-        document.getElementById("loginMsg").innerText = "Invalid login";
-    }
-}
-
-/* PAGE */
 function showPage(page) {
     document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
     document.getElementById(page).classList.add("active");
 }
 
-/* AUTH FETCH */
 async function safeFetch(url, options = {}) {
-
-    options.headers = {
-        ...(options.headers || {}),
-        "token": localStorage.getItem("token")
-    };
-
-    const res = await fetch(url, options);
-
-    if (res.status === 401) {
-        alert("Login expired");
-        location.reload();
-        return null;
-    }
-
-    return res;
+    return fetch(url, options);
 }
 
-/* SCAN */
 async function scan() {
-
     const prompt = document.getElementById("prompt").value;
 
     const res = await safeFetch("/scan", {
@@ -276,12 +195,9 @@ async function scan() {
     loadStats();
 }
 
-/* LOAD DATA */
 async function loadStats() {
 
     const res = await safeFetch("/stats");
-    if (!res) return;
-
     const data = await res.json();
 
     document.getElementById("total").innerText = data.total || 0;
@@ -300,7 +216,6 @@ async function loadStats() {
         .map(e => `<p>[${e.risk}] ${e.attack_type}</p>`)
         .join("");
 
-    /* CHARTS */
     if (chart) chart.destroy();
     if (riskChart) riskChart.destroy();
     if (timelineChart) timelineChart.destroy();
@@ -341,9 +256,7 @@ async function loadStats() {
     });
 }
 
-/* REPORT */
 async function downloadReport() {
-
     const res = await safeFetch("/stats");
     const data = await res.json();
 
@@ -358,6 +271,8 @@ async function downloadReport() {
     a.download = "CogniShieldAI_Report.json";
     a.click();
 }
+
+window.onload = loadStats;
 
 </script>
 
